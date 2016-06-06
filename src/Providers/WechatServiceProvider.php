@@ -28,7 +28,12 @@ class WechatServiceProvider extends ServiceProvider
             'token' => env("WX_TOKEN"),
             'encodingaeskey' => env("WX_ENCODINGAESKEY"),
             'appid' => env("WX_APPID"),
-            'appsecret' => env("WX_APPSECRET")
+            'appsecret' => env("WX_APPSECRET"),
+            'wx_pay_mchid' => env("WX_PAY_MCHID"),
+            'wx_pay_key' => env("WX_PAY_KEY"),
+            'wx_pay_sslcert' => env("WX_PAY_SSLCERT"),
+            'wx_pay_sslkey' => env("WX_PAY_SSLKEY"),
+            'wx_pay_cainfo' => env("WX_PAY_CAINFO"),
         );
 
         app()->singleton('Wechat', function() use($config){

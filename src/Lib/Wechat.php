@@ -195,6 +195,10 @@ class Wechat
 	const SHAKEAROUND_STATISTICS_DEVICE = '/shakearound/statistics/device?';//以设备为维度的数据统计接口
     const SHAKEAROUND_STATISTICS_PAGE = '/shakearound/statistics/page?';//以页面为维度的数据统计接口
 
+	//红包相关接口
+	const SEND_REDPACK_URL = "https://api.mch.weixin.qq.com/mmpaymkttransfers/sendredpack";//发送现金红包接口
+	const SEND_GROUP_REDPACK_URL = "https://api.mch.weixin.qq.com/mmpaymkttransfers/sendgroupredpack";//发送裂变红包接口
+
 	private $token;
 	private $encodingAesKey;
 	private $encrypt_type;
@@ -216,6 +220,13 @@ class Wechat
 	public $errMsg = "no access";
 	public $logcallback;
 
+	//微信支付相关参数
+	private $wx_pay_mchid;
+	private $wx_pay_key;
+	private $wx_pay_sslcert;
+	private $wx_pay_sslkey;
+	private $wx_pay_cainfo;
+
 	public function __construct($options)
 	{
 		$this->token = isset($options['token'])?$options['token']:'';
@@ -224,6 +235,13 @@ class Wechat
 		$this->appsecret = isset($options['appsecret'])?$options['appsecret']:'';
 		$this->debug = isset($options['debug'])?$options['debug']:false;
 		$this->logcallback = isset($options['logcallback'])?$options['logcallback']:false;
+
+		$this->wx_pay_mchid = isset($options['wx_pay_mchid'])?$options['wx_pay_mchid']:'';
+		$this->wx_pay_key = isset($options['wx_pay_key'])?$options['wx_pay_key']:'';
+		$this->wx_pay_sslcert = isset($options['wx_pay_sslcert'])?$options['wx_pay_sslcert']:'';
+		$this->wx_pay_sslkey = isset($options['wx_pay_sslkey'])?$options['wx_pay_sslkey']:'';
+		$this->wx_pay_cainfo = isset($options['wx_pay_cainfo'])?$options['wx_pay_cainfo']:'';
+		$this->redpack_debug = isset($options['redpack_debug'])?$options['redpack_debug']:true;
 	}
 
 	/**
@@ -4201,6 +4219,313 @@ class Wechat
         }
         return false;
     }
+
+	/**
+	 * 发送现金红包
+	 */
+	public function sendRedPack($openid, $money, $total_num, $send_name, $mch_billno, $act_name, $wishing, $remark){
+		$param = new ParamHelper();
+		$param->setParam("nonce_str", $this->getNonceStr());
+		$param->setParam("mch_billno", $mch_billno);
+		$param->setParam("mch_id", $this->wx_pay_mchid);
+		$param->setParam("wxappid", $this->appid);
+		$param->setParam("send_name", $send_name);
+		$param->setParam("re_openid", $openid);
+		$param->setParam("total_amount", $money);
+		$param->setParam("total_num", $total_num);
+		$param->setParam("wishing", $wishing);
+		$param->setParam("act_name", $act_name);
+		$param->setParam("remark",$remark);
+
+		if($total_num*100>$money){
+			throw new \Exception("每个红包的平均金额必须在1.00元到200.00元之间.");
+		}
+
+		if($total_num == 1){
+			//普通红包
+			$url = self::SEND_REDPACK_URL;
+			$param->setParam("client_ip", $_SERVER['REMOTE_ADDR']);
+		}else{
+			if($total_num<3){
+				throw new \Exception("裂变红包个数必须介于(包括)3到20之间.");
+			}
+			//裂变红包
+			$param->setParam("amt_type","ALL_RAND");
+			$url = self::SEND_GROUP_REDPACK_URL;
+		}
+		$param->setSign($this->wx_pay_key);
+		$xmlData = $param->toXml();
+		$response = $this->postXmlCurl($xmlData, $url, true);
+		$result = WxPayResults::init($response, false);
+
+		return $result;
+	}
+
+	/**
+	 *
+	 * 产生随机字符串，不长于32位
+	 * @param int $length
+	 * @return 产生的随机字符串
+	 */
+	private function getNonceStr($length = 32)
+	{
+		$chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+		$str ="";
+		for ( $i = 0; $i < $length; $i++ )  {
+			$str .= substr($chars, mt_rand(0, strlen($chars)-1), 1);
+		}
+		return $str;
+	}
+
+	/**
+	 * 以post方式提交xml到对应的接口url
+	 *
+	 * @param string $xml  需要post的xml数据
+	 * @param string $url  url
+	 * @param bool $useCert 是否需要证书，默认不需要
+	 * @param int $second   url执行超时时间，默认30s
+	 * @throws Exception
+	 */
+	private function postXmlCurl($xml, $url, $useCert = false, $second = 30)
+	{
+		$ch = curl_init();
+		//设置超时
+		curl_setopt($ch, CURLOPT_TIMEOUT, $second);
+
+		curl_setopt($ch,CURLOPT_URL, $url);
+		curl_setopt($ch,CURLOPT_SSL_VERIFYPEER,TRUE);
+		curl_setopt($ch,CURLOPT_SSL_VERIFYHOST,2);//严格校验
+		//设置header
+		curl_setopt($ch, CURLOPT_HEADER, FALSE);
+		//要求结果为字符串且输出到屏幕上
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
+
+		if($useCert == true){
+			//设置证书
+			//使用证书：cert 与 key 分别属于两个.pem文件
+//			curl_setopt($ch,CURLOPT_SSLCERTTYPE,'PEM');
+			curl_setopt($ch,CURLOPT_SSLCERT, $this->wx_pay_sslcert);
+//			curl_setopt($ch,CURLOPT_SSLKEYTYPE,'PEM');
+			curl_setopt($ch,CURLOPT_SSLKEY, $this->wx_pay_sslkey);
+			curl_setopt($ch,CURLOPT_CAINFO, $this->wx_pay_cainfo);
+		}
+		//post提交方式
+		curl_setopt($ch, CURLOPT_POST, TRUE);
+		curl_setopt($ch, CURLOPT_POSTFIELDS, $xml);
+		//运行curl
+		$data = curl_exec($ch);
+		//返回结果
+		if($data){
+			curl_close($ch);
+			return $data;
+		} else {
+			$error = curl_errno($ch);
+			curl_close($ch);
+			throw new \Exception("curl出错，错误码:$error");
+		}
+	}
+
+}
+
+class WxpayBase{
+	protected $values = array();
+
+	/**
+	 * 设置签名，详见签名生成算法
+	 * @param string $value
+	 **/
+	public function setSign($key)
+	{
+		$sign = $this->makeSign($key);
+		$this->values['sign'] = $sign;
+		return $sign;
+	}
+
+	/**
+	 * 获取签名，详见签名生成算法的值
+	 * @return 值
+	 **/
+	public function getSign()
+	{
+		return $this->values['sign'];
+	}
+
+	/**
+	 * 判断签名，详见签名生成算法是否存在
+	 * @return true 或 false
+	 **/
+	public function isSignSet()
+	{
+		return array_key_exists('sign', $this->values);
+	}
+
+	/**
+	 * 输出xml字符
+	 * @throws Exception
+	 **/
+	public function toXml()
+	{
+		if(!is_array($this->values)
+				|| count($this->values) <= 0)
+		{
+			throw new \Exception("数组数据异常！");
+		}
+
+		$xml = "<xml>";
+		foreach ($this->values as $key=>$val)
+		{
+			if (is_numeric($val)){
+				$xml.="<".$key.">".$val."</".$key.">";
+			}else{
+				$xml.="<".$key."><![CDATA[".$val."]]></".$key.">";
+			}
+		}
+		$xml.="</xml>";
+		return $xml;
+	}
+
+	/**
+	 * 将xml转为array
+	 * @param string $xml
+	 * @throws Exception
+	 */
+	public function fromXml($xml)
+	{
+		if(!$xml){
+			throw new \Exception("xml数据异常！");
+		}
+		//将XML转为array
+		//禁止引用外部xml实体
+		libxml_disable_entity_loader(true);
+		$this->values = json_decode(json_encode(simplexml_load_string($xml, 'SimpleXMLElement', LIBXML_NOCDATA)), true);
+		return $this->values;
+	}
+
+	/**
+	 * 格式化参数格式化成url参数
+	 */
+	public function toUrlParams()
+	{
+		$buff = "";
+		foreach ($this->values as $k => $v)
+		{
+			if($k != "sign" && $v != "" && !is_array($v)){
+				$buff .= $k . "=" . $v . "&";
+			}
+		}
+
+		$buff = trim($buff, "&");
+		return $buff;
+	}
+
+	/**
+	 * 生成签名
+	 * @return 签名，本函数不覆盖sign成员变量，如要设置签名需要调用SetSign方法赋值
+	 */
+	public function makeSign($key)
+	{
+		//签名步骤一：按字典序排序参数
+		ksort($this->values);
+		$string = $this->toUrlParams();
+		//签名步骤二：在string后加入KEY
+		$string = $string . "&key=".$key;
+		//签名步骤三：MD5加密
+		$string = md5($string);
+		//签名步骤四：所有字符转为大写
+		$result = strtoupper($string);
+		return $result;
+	}
+
+	/**
+	 * 获取设置的值
+	 */
+	public function getValues()
+	{
+		return $this->values;
+	}
+
+}
+/**
+ * 参数辅助类
+ * Class ParamHelper
+ * @package Formatcc\LaravelWechat\Lib
+ */
+class ParamHelper extends WxpayBase{
+	public function setParam($param, $value){
+		$this->values[$param] = $value;
+	}
+	public function getParam($param){
+		return $this->values[$param];
+	}
+}
+
+/**
+ *
+ * 接口调用结果类
+ */
+class WxPayResults extends WxpayBase{
+	/**
+	 * 检测签名
+	 */
+	public function checkSign($key){
+		if(!$this->isSignSet()){
+			throw new \Exception("签名错误！");
+		}
+
+		$sign = $this->makeSign($key);
+		if($this->getSign() == $sign){
+			return true;
+		}
+		throw new \Exception("签名错误！");
+	}
+
+	/**
+	 *
+	 * 使用数组初始化
+	 * @param array $array
+	 */
+	public function fromArray($array)
+	{
+		$this->values = $array;
+	}
+
+	/**
+	 *
+	 * 使用数组初始化对象
+	 * @param array $array
+	 * @param 是否检测签名 $noCheckSign
+	 */
+	public static function initFromArray($array, $noCheckSign = false)
+	{
+		$obj = new self();
+		$obj->fromArray($array);
+		if($noCheckSign == false){
+			$obj->checkSign();
+		}
+		return $obj;
+	}
+
+
+	/**
+	 * 将xml转为array
+	 * @param $xml 需要解析的xml内容
+	 * @param bool|true $checkSign 是否需要验证签名
+	 * @param $key  验证签名的key
+	 * @return array
+	 * @throws \Exception
+	 */
+	public static function init($xml, $checkSign=true, $key="")
+	{
+		$obj = new self();
+		$obj->fromXml($xml);
+		if($obj->values['return_code'] != 'SUCCESS'){
+			return $obj->getValues();
+		}
+		if($checkSign){
+			$obj->checkSign($key);
+		}
+		return $obj->getValues();
+	}
 }
 /**
  * PKCS7Encoder class
@@ -4300,7 +4625,7 @@ class Prpcrypt
             //			print(base64_encode($encrypted));
             //使用BASE64对加密后的字符串进行编码
             return array(ErrorCode::$OK, base64_encode($encrypted));
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             //print $e;
             return array(ErrorCode::$EncryptAESError, null);
         }
@@ -4324,7 +4649,7 @@ class Prpcrypt
             $decrypted = mdecrypt_generic($module, $ciphertext_dec);
             mcrypt_generic_deinit($module);
             mcrypt_module_close($module);
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             return array(ErrorCode::$DecryptAESError, null);
         }
 
@@ -4344,7 +4669,7 @@ class Prpcrypt
             if (!$appid)
                 $appid = $from_appid;
             //如果传入的appid是空的，则认为是订阅号，使用数据中提取出来的appid
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             //print $e;
             return array(ErrorCode::$IllegalBuffer, null);
         }
