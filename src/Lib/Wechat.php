@@ -4222,6 +4222,16 @@ class Wechat
 
 	/**
 	 * 发送现金红包
+	 * @param $openid		接收红包用户openid
+	 * @param $money		发放金额,单位:分
+	 * @param $total_num	红包个数, 1则为现金红包, 大于等于3则为裂变红包
+	 * @param $send_name	商家名称
+	 * @param $mch_billno	订单号
+	 * @param $act_name		活动名称
+	 * @param $wishing		祝福语
+	 * @param $remark		备注
+	 * @return array
+	 * @throws \Exception
 	 */
 	public function sendRedPack($openid, $money, $total_num, $send_name, $mch_billno, $act_name, $wishing, $remark){
 		$param = new ParamHelper();
