@@ -194,6 +194,7 @@ class Wechat
 	const SHAKEAROUND_USER_GETSHAKEINFO = '/shakearound/user/getshakeinfo?';//获取摇周边的设备及用户信息
 	const SHAKEAROUND_STATISTICS_DEVICE = '/shakearound/statistics/device?';//以设备为维度的数据统计接口
     const SHAKEAROUND_STATISTICS_PAGE = '/shakearound/statistics/page?';//以页面为维度的数据统计接口
+	const SHAKEAROUND_RELATION_SEARCH = '/shakearound/relation/search?';//查询设备与页面的关联关系
 
 	//红包相关接口
 	const SEND_REDPACK_URL = "https://api.mch.weixin.qq.com/mmpaymkttransfers/sendredpack";//发送现金红包接口
@@ -3676,6 +3677,82 @@ class Wechat
         }
         return false;
     }
+
+
+	/**
+	 * 查询设备与页面的关联关系
+	 * [searchShakeAroundRelation 查询设备与页面的关联关系。提供两种查询方式，可指定页面ID分页查询该页面所关联的所有的设备信息；
+	 * 也可根据设备ID或完整的UUID、Major、Minor查询该设备所关联的所有页面信息。
+	 * @param array $data
+	 * $data 三种格式:
+	 * 当查询指定设备所关联的页面时：
+	 *	{
+	 *	"type": 1,
+	 *	"device_identifier": {
+	 *	"device_id": 10011,
+	 *	"uuid": "FDA50693-A4E2-4FB1-AFCF-C6EB07647825",
+	 *	"major": 1002,
+	 *	"minor": 1223
+	 *	}
+	 *	}
+	 * type: 查询方式。1： 查询设备的关联关系；2：查询页面的关联关系
+	 * device_identifiers:指定的设备；当type为1时，此项为必填
+	 * device_id:设备编号，若填了UUID、major、minor，则可不填设备编号，若二者都填，则以设备编号为优先
+	 * uuid、major、minor:三个信息需填写完整，若填了设备编号，则可不填此信息
+	 *
+	 *	当查询页面所关联的设备时：
+	 *	{
+	 *	"type": 2,
+	 *	"page_id": 11101,
+	 *	"begin": 0,
+	 *	"count": 3
+	 *	}
+	 * type: 查询方式。1： 查询设备的关联关系；2：查询页面的关联关系
+	 * page_id:指定的页面id；当type为2时，此项为必填
+	 * begin:关联关系列表的起始索引值；当type为2时，此项为必填
+	 * count:待查询的关联关系数量，不能超过50个；当type为2时，此项为必填
+	 * +-------------------------------------------------------------------------------------------------------------
+	 * @return boolean|mixed
+	 *正确返回JSON 数据示例：
+	 *	{
+	 *	"data": {
+	 *	"relations": [
+	 *	{
+	 *	"device_id": 797994,
+	 *	"major": 10001,
+	 *	"minor": 10023,
+	 *	"page_id": 50054,
+	 *	"uuid": "FDA50693-A4E2-4FB1-AFCF-C6EB07647825"
+	 *	},
+	 *	{
+	 *	"device_id": 797994,
+	 *	"major": 10001,
+	 *	"minor": 10023,
+	 *	"page_id": 50055,
+	 *	"uuid": "FDA50693-A4E2-4FB1-AFCF-C6EB07647825"
+	 *	}
+	 *	],
+	 *	"total_count": 2
+	 *	},
+	 *	"errcode": 0,
+	 *	"errmsg": "success."
+	 *	}
+	 */
+	public function searchShakeAroundRelation($data){
+		if (!$this->access_token && !$this->checkAuth()) return false;
+		$result = $this->http_post(self::API_BASE_URL_PREFIX . self::SHAKEAROUND_RELATION_SEARCH . 'access_token=' . $this->access_token, self::json_encode($data));
+		$this->log($result);
+		if ($result) {
+			$json = json_decode($result, true);
+			if (!$json || !empty($json['errcode'])) {
+				$this->errCode = $json['errcode'];
+				$this->errMsg  = $json['errmsg'];
+				return false;
+			}
+			return $json;
+		}
+		return false;
+	}
 
     /**
      * [bindLocationShakeAroundDevice 配置设备与门店的关联关系]
