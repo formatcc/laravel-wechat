@@ -2,6 +2,7 @@
 
 namespace Formatcc\LaravelWechat\Providers;
 
+use Formatcc\LaravelWechat\Lib\OpenWechat;
 use Formatcc\LaravelWechat\Lib\Wechat;
 use Illuminate\Support\ServiceProvider;
 
@@ -38,6 +39,16 @@ class WechatServiceProvider extends ServiceProvider
 
         app()->singleton('Wechat', function() use($config){
             return new Wechat($config);
+        });
+
+        $options = array(
+            "appid"=>env("WX_OPEN_APPID"),
+            "appsecret"=>env("WX_OPEN_APPSECRET"),
+            "token"=>env("WX_OPEN_TOKEN"),
+            "aeskey"=>env("WX_OPEN_AESKEY")
+        );
+        app()->singleton('OpenWechat', function() use($options){
+            return new OpenWechat($options);
         });
 
     }
